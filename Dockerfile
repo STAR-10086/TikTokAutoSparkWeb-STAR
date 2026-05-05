@@ -10,7 +10,7 @@ COPY src ./src
 RUN npm run build
 
 # Stage 2: Final image
-FROM ubuntu:22.04
+FROM debian:12-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV DISPLAY=:99
@@ -22,16 +22,15 @@ ENV PORT=5000
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Python
     python3 python3-pip python3-venv \
-    # Browser & driver (use chromium package, not snap version)
+    # Browser & driver
     chromium chromium-driver \
     # VNC & desktop
     xvfb x11vnc openbox \
     # Chinese fonts
     fonts-wqy-microhei fonts-wqy-zenhei fontconfig \
     # Utilities
-    curl ca-certificates gnupg \
+    curl ca-certificates \
     && ln -sf /usr/bin/python3 /usr/bin/python \
-    && ln -sf /usr/lib/chromium/chromedriver /usr/bin/chromedriver \
     && fc-cache -fv \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/*
