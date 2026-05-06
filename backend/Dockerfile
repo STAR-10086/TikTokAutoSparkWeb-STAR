@@ -27,10 +27,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy backend code
 COPY main.py .
+COPY start.sh .
+RUN chmod +x start.sh
 
 # VNC password
 RUN mkdir -p ~/.vnc && x11vnc -storepasswd 123456 ~/.vnc/password
 
 EXPOSE 5000 6080
 
-CMD ["python", "main.py"]
+CMD ["./start.sh"]
