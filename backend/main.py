@@ -129,38 +129,79 @@ class DouyinBot:
 
     def get_friends_list(self):
         """Get list of friends from Douyin chat page"""
-        xpath = '//div[@class="conversationConversationListwrapper"]/div/div/div'
-        try:
-            msg_list = self.driver.find_elements(By.XPATH, xpath)
-            friends = []
-            self.friends_cache = {}
+        # Wait for page to load
+        time.sleep(3)
 
-            for i in range(1, len(msg_list) + 1):
-                try:
-                    name_xpath = f'{xpath}[{i + 1}]/div[1]/div[2]/div[1]/div[1]'
-                    avatar_xpath = f'{xpath}[{i + 1}]/div[1]/div[1]/div/span/img'
-                    avatar_xpath2 = f'{xpath}[{i + 1}]/div/div/img'
-                    fire_xpath = f'{xpath}[{i + 1}]/div[1]/div[2]/div[1]/div[2]/div[1]/div/div'
+        # Try multiple possible selectors for friend list
+        list_selectors = [
+            '//div[@class="conversationConversationListwrapper"]/div/div/div',
+            '//div[contains(@class, "conversationList")]//div[contains(@class, "item")]',
+            '//div[contains(@class, "chat-list")]//div[contains(@class, "item")]',
+            '//div[contains(@class, "friend")]//div[contains(@class, "item")]',
+        ]
 
-                    name = self.driver.find_element(By.XPATH, name_xpath).text
-                    try:
-                        avatar = self.driver.find_element(By.XPATH, avatar_xpath).get_attribute("src")
-                    except:
-                        avatar = self.driver.find_element(By.XPATH, avatar_xpath2).get_attribute("src")
+        friends = []
+        self.friends_cache = {}
 
-                    try:
-                        fire = self.driver.find_element(By.XPATH, fire_xpath).text.strip()
-                    except:
-                        fire = ""
-
-                    self.friends_cache[name] = {"avatar": avatar, "fire": fire}
-                    friends.append({"name": name, "avatar": avatar, "fire": fire})
-                except:
+        for list_xpath in list_selectors:
+            try:
+                msg_list = self.driver.find_elements(By.XPATH, list_xpath)
+                if not msg_list:
                     continue
 
-            return friends
-        except Exception as e:
-            raise Exception(f"Failed to get friends list: {str(e)}")
+                for i, item in enumerate(msg_list):
+                    try:
+                        # Try to get name
+                        name = None
+                        name_selectors = [
+                            './/div[contains(@class, "name")]',
+                            './/span[contains(@class, "name")]',
+                            './/div[2]/div[1]/div[1]',
+                        ]
+                        for name_sel in name_selectors:
+                            try:
+                                name = item.find_element(By.XPATH, name_sel).text.strip()
+                                if name:
+                                    break
+                            except:
+                                continue
+
+                        if not name:
+                            continue
+
+                        # Try to get avatar
+                        avatar = ""
+                        try:
+                            avatar_el = item.find_element(By.XPATH, './/img')
+                            avatar = avatar_el.get_attribute("src") or ""
+                        except:
+                            pass
+
+                        # Try to get fire count
+                        fire = ""
+                        fire_selectors = [
+                            './/div[contains(@class, "fire")]',
+                            './/span[contains(@class, "fire")]',
+                        ]
+                        for fire_sel in fire_selectors:
+                            try:
+                                fire = item.find_element(By.XPATH, fire_sel).text.strip()
+                                if fire:
+                                    break
+                            except:
+                                continue
+
+                        self.friends_cache[name] = {"avatar": avatar, "fire": fire}
+                        friends.append({"name": name, "avatar": avatar, "fire": fire})
+                    except:
+                        continue
+
+                if friends:
+                    break
+            except:
+                continue
+
+        return friends
 
     def send_message(self, name: str, text: str) -> bool:
         """Send message to a friend"""
@@ -572,6 +613,26 @@ async def tasks_update(
 
 @app.get("/api/system/info")
 async def system_info(token: str = Depends(require_auth)):
+    # Check login status if browser is initialized
+    if state.browser_initialized:
+        try:
+            login_panel_selectors = [
+                '//*[@id="douyin_login_comp_flat_panel"]/picture',
+                '//*[@id="douyin_login_comp_flat_panel"]',
+                '//div[contains(@class, "login-panel")]',
+            ]
+            for selector in login_panel_selectors:
+                try:
+                    state.driver.find_element(By.XPATH, selector)
+                    state.user_logged_in = False
+                    break
+                except:
+                    continue
+            else:
+                state.user_logged_in = True
+        except:
+            pass
+
     return {
         "code": 200,
         "data": {
