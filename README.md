@@ -1,159 +1,151 @@
-# TikTokAutoSparkWeb
+# TikTok Auto Spark
 
-抖音火花助手 Web 管理平台，基于 Vue 3 + Element Plus 构建，提供抖音好友火花自动续期的可视化管理系统。
+抖音自动续火花管理系统 - Docker 容器化版本
 
-**📨 如果该项目对您有帮助,感谢您留下Start🌟**
-
-# 法律声明
-
-**重要提示**：本程序仅供个人学习和研究使用。请严格遵守相关法律法规，不得将本程序用于任何违法或侵权行为。如有任何侵权问题，请及时通过以下方式联系我：
-- **邮箱**：3595655855@qq.com
-- **群聊**: 1061290461
----
-## 界面截图
-<img width="2356" height="1238" alt="image" src="https://github.com/user-attachments/assets/49d3066e-ecef-42d6-a983-b3a4ae7b08a3" />
-
-## 默认信息
-账户: admin 密码:123456
 ## 功能特性
 
-### 账户管理
-- 扫码登录（抖音 App 扫码授权）
-- 手机号登录
-- 手动登录（Base64Cookie 方式）
-- Cookie 一键导出
-- 登录状态实时监测
-- 上次登录 IP 记录
-- 管理员密码修改
-
-### 好友管理
-- 好友列表展示（头像、火花天数）
-- 好友搜索过滤
-- 实时刷新好友数据
-- 一键发送消息
-
-### 定时任务
-- 为好友创建每日定时发送任务
-- 支持自定义消息内容（留空使用每日名言）
-- 修改已有任务执行时间
-- 删除定时任务
-- 最近任务快捷入口
-
-### 首页看板
-- 浏览器/登录状态监测
-- 好友数量 / 定时任务数量统计
-- 快速操作入口
-- 系统运行信息（版本、在线时长）
-
----
+- Web 管理界面（Vue 3 + Element Plus）
+- 浏览器自动化（Selenium + Chromium）
+- VNC 远程桌面（手动登录、实时查看）
+- 定时任务管理（每日定时发送消息）
+- 好友列表管理
+- Docker 容器化部署
 
 ## 技术栈
 
-| 层级 | 技术 |
+| 组件 | 技术 |
 |------|------|
-| 前端框架 | Vue 3 (Composition API) |
-| UI 组件库 | Element Plus |
-| 状态管理 | Pinia |
-| 构建工具 | Vite |
-| 路由 | Vue Router |
-| HTTP 客户端 | Axios |
-
----
-
-## 项目结构
-
-```
-admin/
-├── src/
-│   ├── api/
-│   │   └── douyin.js          # API 接口封装
-│   ├── stores/
-│   │   ├── browser.js          # 浏览器/登录状态 store
-│   │   └── user.js             # 用户认证 store
-│   ├── views/
-│   │   ├── Home.vue            # 首页看板
-│   │   ├── Friends.vue         # 好友列表
-│   │   ├── Tasks.vue           # 定时任务管理
-│   │   ├── Settings.vue         # 系统设置
-│   │   └── Login.vue           # 登录页
-│   ├── App.vue
-│   ├── main.js
-│   └── router/index.js
-├── dist/                       # 生产构建产物
-├── vite.config.js              # Vite 配置（含 API 代理）
-└── package.json
-```
-
----
+| 前端 | Vue 3 + Vite + Element Plus + Pinia |
+| 后端 | Python FastAPI + Selenium |
+| 浏览器 | Chromium + ChromeDriver |
+| 桌面 | Xvfb + x11vnc + openbox |
+| 部署 | Docker + docker-compose |
 
 ## 快速开始
 
-### 环境要求
-- Node.js >= 16
-- Python 3.8+（后端服务）
-- Chrome / Chromium（自动化依赖）
-
-### 安装依赖
+### 使用 docker-compose（推荐）
 
 ```bash
-cd Web/admin
-npm install
+# 克隆项目
+git clone https://github.com/STAR-10086/TikTokAutoSparkWeb-STAR.git
+cd TikTokAutoSparkWeb-STAR
+
+# 启动服务
+docker-compose up -d
+
+# 查看日志
+docker-compose logs -f
 ```
 
-### 开发模式
+### 访问服务
+
+- **Web 管理界面**: http://localhost:8080
+- **后端 API**: http://localhost:5000
+- **VNC 远程桌面**: localhost:5900 (密码: 123456)
+
+### 默认账号
+
+- **用户名**: admin
+- **密码**: 123456
+
+## 使用说明
+
+### 1. 初始化浏览器
+
+登录 Web 管理界面后，进入「浏览器」页面，点击「初始化浏览器」按钮。
+
+### 2. 登录抖音
+
+有两种登录方式：
+
+**方式一：扫码登录**
+1. 点击「扫码登录」按钮
+2. 使用 VNC Viewer 连接 `localhost:5900`
+3. 在 VNC 桌面中查看浏览器显示的二维码
+4. 使用抖音 APP 扫描二维码
+
+**方式二：Cookie 登录**
+1. 在 VNC 桌面中手动登录抖音
+2. 通过 API 获取 Cookie
+3. 在 Web 界面中导入 Cookie
+
+### 3. 管理好友
+
+登录成功后，进入「好友列表」页面，点击「刷新列表」获取好友信息。
+
+### 4. 添加定时任务
+
+进入「定时任务」页面，点击「添加任务」，选择好友和发送时间。
+
+## 目录结构
+
+```
+TikTokAutoSparkWeb-STAR/
+├── frontend/          # 前端代码
+│   ├── src/           # Vue 源码
+│   ├── Dockerfile     # 前端 Docker 配置
+│   └── nginx.conf     # Nginx 配置
+├── backend/           # 后端代码
+│   ├── main.py        # FastAPI 主程序
+│   ├── Dockerfile     # 后端 Docker 配置
+│   └── requirements.txt
+├── docker-compose.yml # Docker Compose 配置
+└── .github/workflows/ # GitHub Actions
+```
+
+## 环境变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| PORT | 5000 | 后端 API 端口 |
+| ADMIN_PASSWORD | 123456 | 管理员密码 |
+| DISPLAY_BROWSER | true | 是否显示浏览器窗口 |
+
+## 端口说明
+
+| 端口 | 服务 |
+|------|------|
+| 8080 | Web 管理界面 |
+| 5000 | 后端 API |
+| 5900 | VNC 远程桌面 |
+
+## 从旧版本迁移
+
+旧版本使用单体架构，新版本采用前后端分离架构：
+
+- 前端独立部署在 Nginx
+- 后端独立运行 FastAPI
+- 通过 docker-compose 统一管理
+
+## GitHub Actions
+
+推送到 main 分支时自动构建 Docker 镜像：
+
+- `ghcr.io/star-10086/tiktokautosparkweb-star-frontend:latest`
+- `ghcr.io/star-10086/tiktokautosparkweb-star-backend:latest`
+
+## 故障排查
+
+### VNC 连接失败
 
 ```bash
-npm run dev
+# 检查 VNC 进程
+docker exec tiktok-spark-backend ps aux | grep vnc
 ```
 
-访问 `http://localhost:5173`，开发服务器会自动代理 `/api` 请求到后端。
-
-### 生产构建
+### 中文显示异常
 
 ```bash
-npm run build
+# 重建字体缓存
+docker exec tiktok-spark-backend fc-cache -fv
 ```
 
-产物输出到 `dist/` 目录，可部署至任意静态服务器。
+### 浏览器启动失败
 
----
-
-## API 代理配置
-
-开发环境下 Vite 自动将 `/api` 代理至后端（`vite.config.js`）：
-如有相同替换即可
-```js
-        location / {
-            index index.php index.html;
-            try_files $uri $uri/ /index.html;
-            autoindex  off;
-            .......
-          }
-        location /api/ {
-            proxy_pass http://127.0.0.1:9844/;
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_connect_timeout 60s;
-            proxy_read_timeout 60s;
-        }
+```bash
+# 检查 Chromium 版本
+docker exec tiktok-spark-backend chromium --version
 ```
-
-> 后端默认端口为 `9844`，请确保 FastAPI 后端已启动并监听该端口。
-
----
-
-## 页面路由
-
-| 路径 | 页面 | 说明 |
-|------|------|------|
-| `/login` | 登录页 | 管理员账户登录 |
-| `/home` | 首页 | 状态看板、快速操作 |
-| `/friends` | 好友列表 | 查看好友、发送消息 |
-| `/tasks` | 定时任务 | 添加/修改/删除任务 |
-| `/settings` | 设置 | 登录管理、密码修改 |
-
----
 
 ## License
 

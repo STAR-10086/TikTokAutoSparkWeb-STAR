@@ -23,3 +23,11 @@ data/
 
 # Logs
 *.log
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Docker
+docker-compose.override.yml
