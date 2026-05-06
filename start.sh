@@ -34,6 +34,10 @@ sed -i 's/host="localhost"/host="0.0.0.0"/' /app/backend_linux.py
 # Add Chrome-specific options
 sed -i "/options.add_argument('--no-sandbox')/a\\    options.add_argument('--disable-dev-shm-usage')" /app/backend_linux.py
 
+# Add static file serving for frontend
+sed -i 's/from fastapi import FastAPI, Header, Request, Query, Body/from fastapi import FastAPI, Header, Request, Query, Body\nfrom fastapi.staticfiles import StaticFiles/' /app/backend_linux.py
+sed -i "/app = FastAPI()/a\\app.mount(\"/\", StaticFiles(directory=\"/app/dist\", html=True), name=\"static\")" /app/backend_linux.py
+
 echo "=== Starting Backend Service ==="
 cd /app
 python3 backend_linux.py
