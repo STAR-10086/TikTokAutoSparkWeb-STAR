@@ -199,11 +199,23 @@ class DouyinBot:
     def init_login(self):
         """Click login button to show QR code"""
         try:
-            btn = self.driver.find_element(
-                By.XPATH,
-                '//*[@id="douyin_login_comp_flat_panel"]/div/div[2]/div/div[4]/p'
-            )
-            btn.click()
+            # Wait for page to load
+            time.sleep(3)
+            # Try multiple possible login button selectors
+            selectors = [
+                '//*[@id="douyin_login_comp_flat_panel"]/div/div[2]/div/div[4]/p',
+                '//p[contains(text(), "登录")]',
+                '//button[contains(text(), "登录")]',
+                '//div[contains(@class, "login")]//p',
+            ]
+            for selector in selectors:
+                try:
+                    btn = self.driver.find_element(By.XPATH, selector)
+                    btn.click()
+                    time.sleep(2)
+                    return
+                except:
+                    continue
         except:
             pass
 
@@ -343,30 +355,44 @@ async def get_qrcode(token: str = Depends(require_auth)):
 
     try:
         state.douyin.init_login()
-        try:
-            err = state.driver.find_element(By.XPATH, '//*[@id="animate_qrcode_container"]/div[2]/div/p[1]')
-            img = state.driver.find_element(By.XPATH, '//*[@id="animate_qrcode_container"]/div[2]/img')
-            img.click()
-        except:
-            pass
+        time.sleep(2)
 
-        img = state.driver.find_element(By.XPATH, '//*[@id="animate_qrcode_container"]/div[2]/img')
-        src = img.get_attribute("src")
+        # Try multiple possible QR code selectors
+        qr_selectors = [
+            '//*[@id="animate_qrcode_container"]/div[2]/img',
+            '//img[contains(@src, "qrcode")]',
+            '//div[contains(@class, "qrcode")]//img',
+            '//div[contains(@class, "QRCode")]//img',
+            '//canvas[contains(@class, "qrcode")]',
+        ]
 
-        try:
-            refresh = state.driver.find_element(By.XPATH, '//*[@id="animate_qrcode_container"]/div[2]/div')
-            refresh.click()
-            time.sleep(3)
-            img = state.driver.find_element(By.XPATH, '//*[@id="animate_qrcode_container"]/div[2]/img')
-            src = img.get_attribute("src")
-        except:
-            pass
+        src = None
+        for selector in qr_selectors:
+            try:
+                element = state.driver.find_element(By.XPATH, selector)
+                src = element.get_attribute("src")
+                if src:
+                    break
+            except:
+                continue
+
+        # If no src found, try to take screenshot of QR area
+        if not src:
+            try:
+                # Take screenshot and return it
+                state.driver.save_screenshot("/tmp/qrcode.png")
+                with open("/tmp/qrcode.png", "rb") as f:
+                    img_data = base64.b64encode(f.read()).decode("utf-8")
+                os.remove("/tmp/qrcode.png")
+                return {"code": 200, "data": f"data:image/png;base64,{img_data}"}
+            except:
+                pass
 
         if src:
             return {"code": 200, "data": src}
         return {"code": 400, "data": "QR code not found"}
-    except NoSuchElementException:
-        return {"code": 400, "data": "QR code element not found"}
+    except Exception as e:
+        return {"code": 400, "data": f"QR code error: {str(e)}"}
 
 @app.get("/api/browser/check-login")
 async def check_login(token: str = Depends(require_auth)):
