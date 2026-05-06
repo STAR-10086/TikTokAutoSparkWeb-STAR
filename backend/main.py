@@ -401,12 +401,51 @@ async def check_login(token: str = Depends(require_auth)):
         return {"code": 200, "data": {"logged_in": False}}
 
     try:
-        state.driver.find_element(By.XPATH, '//*[@id="douyin_login_comp_flat_panel"]/picture')
-        state.user_logged_in = False
-    except NoSuchElementException:
-        state.user_logged_in = True
+        # Multiple ways to detect login status
+        logged_in = False
 
-    return {"code": 200, "data": {"logged_in": state.user_logged_in}}
+        # Method 1: Check if login panel exists (if exists, not logged in)
+        login_panel_selectors = [
+            '//*[@id="douyin_login_comp_flat_panel"]/picture',
+            '//*[@id="douyin_login_comp_flat_panel"]',
+            '//div[contains(@class, "login-panel")]',
+        ]
+        for selector in login_panel_selectors:
+            try:
+                state.driver.find_element(By.XPATH, selector)
+                logged_in = False
+                break
+            except:
+                continue
+        else:
+            # No login panel found, might be logged in
+            logged_in = True
+
+        # Method 2: Check for user avatar or username (if exists, logged in)
+        if not logged_in:
+            user_selectors = [
+                '//img[contains(@class, "avatar")]',
+                '//div[contains(@class, "user-info")]',
+                '//span[contains(@class, "nickname")]',
+            ]
+            for selector in user_selectors:
+                try:
+                    state.driver.find_element(By.XPATH, selector)
+                    logged_in = True
+                    break
+                except:
+                    continue
+
+        # Method 3: Check page source for login indicators
+        if not logged_in:
+            page_source = state.driver.page_source
+            if 'douyin_login_comp' not in page_source and '登录' not in page_source[:1000]:
+                logged_in = True
+
+        state.user_logged_in = logged_in
+        return {"code": 200, "data": {"logged_in": state.user_logged_in}}
+    except Exception as e:
+        return {"code": 200, "data": {"logged_in": False, "error": str(e)}}
 
 @app.get("/api/browser/screenshot")
 async def screenshot(token: str = Depends(require_auth)):
