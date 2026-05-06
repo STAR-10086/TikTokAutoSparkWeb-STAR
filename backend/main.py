@@ -4,13 +4,11 @@ FastAPI + Selenium automation service
 """
 
 import os
-import json
 import time
 import base64
 import hashlib
 import secrets
 import threading
-import re
 from datetime import datetime
 from typing import Optional
 
@@ -20,7 +18,6 @@ import requests
 from fastapi import FastAPI, Header, Request, Query, Body, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import NoSuchElementException, SessionNotCreatedException
@@ -122,89 +119,267 @@ def create_chrome_options() -> webdriver.ChromeOptions:
 # Douyin Automation
 # =============================================================================
 
+CREATOR_CHAT_URL = "https://creator.douyin.com/creator-micro/data/following/chat"
+
 class DouyinBot:
     def __init__(self, driver):
         self.driver = driver
         self.friends_cache = {}
 
-    def get_friends_list(self):
-        """Get list of friends from Douyin chat page"""
-        # Wait for page to load
-        time.sleep(3)
+    def _ensure_all_tab(self):
+        """Click the '全部' tab to show all conversations"""
+        time.sleep(2)
+        tab_selectors = ['.semi-tabs-tab', '.sub-tab-item-yeJmWL', '[class*="sub-tab-item-"]']
+        for sel in tab_selectors:
+            try:
+                tabs = self.driver.find_elements(By.CSS_SELECTOR, sel)
+                for tab in tabs:
+                    if tab.text.strip() == '全部':
+                        # Check if already active
+                        cls = tab.get_attribute('class') or ''
+                        aria = tab.get_attribute('aria-selected') or ''
+                        if 'active' in cls or aria == 'true':
+                            return
+                        tab.click()
+                        time.sleep(1.5)
+                        return
+            except:
+                continue
+        # Fallback: xpath
+        for xpath in ['//div[contains(@class, "semi-tabs-tab")]//span[contains(text(), "全部")]',
+                       '//span[contains(@class, "semi-tabs-tab-text") and contains(text(), "全部")]']:
+            try:
+                tab = self.driver.find_element(By.XPATH, xpath)
+                tab.click()
+                time.sleep(1.5)
+                return
+            except:
+                continue
 
-        # Try multiple possible selectors for friend list
-        list_selectors = [
-            '//div[@class="conversationConversationListwrapper"]/div/div/div',
-            '//div[contains(@class, "conversationList")]//div[contains(@class, "item")]',
-            '//div[contains(@class, "chat-list")]//div[contains(@class, "item")]',
-            '//div[contains(@class, "friend")]//div[contains(@class, "item")]',
-        ]
+    def _collect_visible_friends(self, seen_names: set) -> list:
+        """Collect currently visible conversation items"""
+        items = []
+        msg_list = []
+        for sel in ['[class*="conversation-list-item-"]', '[class*="list-item-"]']:
+            try:
+                msg_list = self.driver.find_elements(By.CSS_SELECTOR, sel)
+                if msg_list:
+                    break
+            except:
+                continue
+        if not msg_list:
+            for xpath in ['//div[contains(@class, "conversation-list")]//div[contains(@class, "item")]',
+                          '//div[contains(@class, "chat-list")]//div[contains(@class, "item")]']:
+                try:
+                    msg_list = self.driver.find_elements(By.XPATH, xpath)
+                    if msg_list:
+                        break
+                except:
+                    continue
+
+        for item in msg_list:
+            try:
+                name = None
+                for sel in ['[class*="item-header-name-"]', '[class*="nick-name-"]', '[class*="name-"]']:
+                    try:
+                        el = item.find_element(By.CSS_SELECTOR, sel)
+                        name = el.text.strip()
+                        if name:
+                            break
+                    except:
+                        continue
+                if not name:
+                    for xpath_sel in ['.//div[contains(@class, "name")]', './/span[contains(@class, "name")]']:
+                        try:
+                            name = item.find_element(By.XPATH, xpath_sel).text.strip()
+                            if name:
+                                break
+                        except:
+                            continue
+                if not name or name in seen_names:
+                    continue
+                seen_names.add(name)
+                avatar = ""
+                try:
+                    avatar = item.find_element(By.CSS_SELECTOR, 'img').get_attribute("src") or ""
+                except:
+                    pass
+                items.append({"name": name, "avatar": avatar, "fire": ""})
+            except:
+                continue
+        return items
+
+    def get_friends_list(self):
+        """Get list of friends from creator platform chat page (with scroll for virtual list)"""
+        time.sleep(3)
+        self._ensure_all_tab()
 
         friends = []
         self.friends_cache = {}
+        seen_names = set()
 
-        for list_xpath in list_selectors:
+        # Find the scrollable conversation list container
+        scroll_container = None
+        container_selectors = [
+            '[class*="conversation-list-"]',
+            '[class*="session-list-"]',
+            '//div[contains(@class, "conversation-list")]',
+        ]
+        for sel in container_selectors:
             try:
-                msg_list = self.driver.find_elements(By.XPATH, list_xpath)
-                if not msg_list:
-                    continue
-
-                for i, item in enumerate(msg_list):
-                    try:
-                        # Try to get name
-                        name = None
-                        name_selectors = [
-                            './/div[contains(@class, "name")]',
-                            './/span[contains(@class, "name")]',
-                            './/div[2]/div[1]/div[1]',
-                        ]
-                        for name_sel in name_selectors:
-                            try:
-                                name = item.find_element(By.XPATH, name_sel).text.strip()
-                                if name:
-                                    break
-                            except:
-                                continue
-
-                        if not name:
-                            continue
-
-                        # Try to get avatar
-                        avatar = ""
-                        try:
-                            avatar_el = item.find_element(By.XPATH, './/img')
-                            avatar = avatar_el.get_attribute("src") or ""
-                        except:
-                            pass
-
-                        # Try to get fire count
-                        fire = ""
-                        fire_selectors = [
-                            './/div[contains(@class, "fire")]',
-                            './/span[contains(@class, "fire")]',
-                        ]
-                        for fire_sel in fire_selectors:
-                            try:
-                                fire = item.find_element(By.XPATH, fire_sel).text.strip()
-                                if fire:
-                                    break
-                            except:
-                                continue
-
-                        self.friends_cache[name] = {"avatar": avatar, "fire": fire}
-                        friends.append({"name": name, "avatar": avatar, "fire": fire})
-                    except:
-                        continue
-
-                if friends:
+                if sel.startswith('//'):
+                    scroll_container = self.driver.find_element(By.XPATH, sel)
+                else:
+                    scroll_container = self.driver.find_element(By.CSS_SELECTOR, sel)
+                if scroll_container:
                     break
             except:
                 continue
 
+        # Collect with incremental scrolling (virtual list loads more on scroll)
+        max_scrolls = 30
+        no_new_count = 0
+        last_scroll_top = -1
+        stuck_count = 0
+        for _ in range(max_scrolls):
+            new_items = self._collect_visible_friends(seen_names)
+            if new_items:
+                friends.extend(new_items)
+                for f in new_items:
+                    self.friends_cache[f["name"]] = {"avatar": f["avatar"], "fire": ""}
+                no_new_count = 0
+            else:
+                no_new_count += 1
+
+            if no_new_count >= 3:
+                break
+
+            # Check if reached bottom
+            try:
+                no_more = self.driver.find_elements(By.CSS_SELECTOR, '[class*="no-more-tip-"]')
+                if no_more:
+                    break
+            except:
+                pass
+
+            # Incremental scroll down
+            if scroll_container:
+                try:
+                    self.driver.execute_script(
+                        "arguments[0].scrollTop += 500", scroll_container
+                    )
+                except:
+                    break
+            else:
+                try:
+                    self.driver.execute_script("window.scrollBy(0, 500)")
+                except:
+                    break
+            time.sleep(0.5)
+            # Check if actually scrolled
+            if scroll_container:
+                cur_top = self.driver.execute_script("return arguments[0].scrollTop", scroll_container)
+            else:
+                cur_top = self.driver.execute_script("return window.scrollY")
+            if cur_top == last_scroll_top:
+                stuck_count += 1
+                if stuck_count >= 4:
+                    break
+            else:
+                stuck_count = 0
+            last_scroll_top = cur_top
+
         return friends
 
+    def _find_and_click_user(self, name: str) -> bool:
+        """Find and click a user in the conversation list, with scroll support"""
+        list_selectors = ['[class*="conversation-list-item-"]', '[class*="list-item-"]']
+        name_selectors = ['[class*="item-header-name-"]', '[class*="nick-name-"]', '[class*="name-"]']
+
+        def _try_click_visible():
+            list_items = []
+            for sel in list_selectors:
+                try:
+                    list_items = self.driver.find_elements(By.CSS_SELECTOR, sel)
+                    if list_items:
+                        break
+                except:
+                    continue
+            for item in list_items:
+                try:
+                    for name_sel in name_selectors:
+                        try:
+                            name_el = item.find_element(By.CSS_SELECTOR, name_sel)
+                            if name_el.text.strip() == name:
+                                item.click()
+                                return True
+                        except:
+                            continue
+                except:
+                    continue
+            return False
+
+        # Try without scroll first
+        if _try_click_visible():
+            return True
+
+        # Scroll to find the user (virtual list)
+        scroll_container = None
+        sample = None
+        for sel in ['[class*="item-header-name-"]']:
+            try:
+                sample = self.driver.find_element(By.CSS_SELECTOR, sel)
+                break
+            except:
+                continue
+
+        if sample:
+            el = sample
+            for _ in range(10):
+                el = el.parent
+                if not el or el.tag_name == 'body':
+                    break
+                overflow = self.driver.execute_script(
+                    "return window.getComputedStyle(arguments[0]).overflowY", el
+                )
+                scroll_h = self.driver.execute_script("return arguments[0].scrollHeight", el)
+                client_h = self.driver.execute_script("return arguments[0].clientHeight", el)
+                if overflow in ('auto', 'scroll') and scroll_h > client_h + 10:
+                    scroll_container = el
+                    break
+
+        if not scroll_container:
+            return False
+
+        no_more_sel = '[class*="no-more-tip-"]'
+        last_scroll_top = -1
+        stuck_count = 0
+        for _ in range(30):
+            if _try_click_visible():
+                return True
+            # Check if reached bottom
+            try:
+                self.driver.find_element(By.CSS_SELECTOR, no_more_sel)
+                break
+            except:
+                pass
+            self.driver.execute_script(
+                "arguments[0].scrollTop += 500", scroll_container
+            )
+            time.sleep(0.4)
+            cur_top = self.driver.execute_script("return arguments[0].scrollTop", scroll_container)
+            if cur_top == last_scroll_top:
+                stuck_count += 1
+                if stuck_count >= 4:
+                    break
+            else:
+                stuck_count = 0
+            last_scroll_top = cur_top
+
+        return False
+
     def send_message(self, name: str, text: str) -> bool:
-        """Send message to a friend"""
+        """Send message to a friend on creator platform"""
         if not self.friends_cache:
             self.get_friends_list()
 
@@ -212,22 +387,56 @@ class DouyinBot:
             raise Exception(f"Friend '{name}' not found")
 
         try:
-            xpath = '//div[@class="conversationConversationListwrapper"]/div/div/div'
-            for i in range(1, len(self.friends_cache) + 2):
+            if not self._find_and_click_user(name):
+                raise Exception(f"Could not click on friend '{name}'")
+
+            time.sleep(2)
+
+            # Find input box (contenteditable div)
+            input_el = None
+            for sel in ['[class*="chat-input-"]', '[class*="message-input-"]', '[class*="editor-"]']:
                 try:
-                    name_xpath = f'{xpath}[{i + 1}]/div[1]/div[2]/div[1]/div[1]'
-                    el = self.driver.find_element(By.XPATH, name_xpath)
-                    if el.text == name:
-                        el.click()
-                        time.sleep(1.5)
-                        input_xpath = '//div[@class="messageEditorimChatEditorContainer"]/div/div'
-                        input_el = self.driver.find_element(By.XPATH, input_xpath)
-                        input_el.send_keys(text)
-                        input_el.send_keys(Keys.ENTER)
-                        return True
+                    input_el = self.driver.find_element(By.CSS_SELECTOR, sel)
+                    if input_el:
+                        break
                 except:
                     continue
-            raise Exception(f"Could not click on friend '{name}'")
+
+            if not input_el:
+                raise Exception("Could not find message input box")
+
+            # Set content via JS (contenteditable div, send_keys won't work properly)
+            lines = text.split('\n')
+            inner_html = '<br>'.join(
+                line.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;') or '<br>'
+                for line in lines
+            )
+            self.driver.execute_script("arguments[0].textContent = ''", input_el)
+            self.driver.execute_script("arguments[0].innerHTML = arguments[1]", input_el, inner_html)
+            self.driver.execute_script("""
+                arguments[0].dispatchEvent(new InputEvent('input', {
+                    bubbles: true, cancelable: true, inputType: 'insertText', data: arguments[1]
+                }))
+            """, input_el, text)
+            time.sleep(0.5)
+
+            # Click send button
+            send_btn = None
+            for sel in ['.chat-btn', '[class*="chat-btn"]', '[class*="send-btn"]']:
+                try:
+                    send_btn = self.driver.find_element(By.CSS_SELECTOR, sel)
+                    if send_btn:
+                        break
+                except:
+                    continue
+
+            if send_btn:
+                send_btn.click()
+            else:
+                input_el.send_keys(Keys.ENTER)
+
+            time.sleep(1)
+            return True
         except Exception as e:
             raise Exception(f"Failed to send message: {str(e)}")
 
@@ -238,16 +447,14 @@ class DouyinBot:
         return name in self.friends_cache
 
     def init_login(self):
-        """Click login button to show QR code"""
+        """Click login button to show QR code on creator platform"""
         try:
-            # Wait for page to load
             time.sleep(3)
-            # Try multiple possible login button selectors
             selectors = [
-                '//*[@id="douyin_login_comp_flat_panel"]/div/div[2]/div/div[4]/p',
-                '//p[contains(text(), "登录")]',
                 '//button[contains(text(), "登录")]',
-                '//div[contains(@class, "login")]//p',
+                '//p[contains(text(), "登录")]',
+                '//div[contains(@class, "login")]//button',
+                '//span[contains(text(), "登录")]',
             ]
             for selector in selectors:
                 try:
@@ -349,7 +556,7 @@ async def browser_init(token: str = Depends(require_auth)):
         options = create_chrome_options()
         state.driver = webdriver.Chrome(options=options)
         state.driver.set_window_size(1400, 3200)
-        state.driver.get("https://www.douyin.com/chat?isPopup=1")
+        state.driver.get(CREATOR_CHAT_URL)
         state.douyin = DouyinBot(state.driver)
         state.browser_initialized = True
         return {"code": 200, "data": "Browser initialized"}
@@ -377,14 +584,18 @@ async def login_cookie(
         cookies = eval(base64.b64decode(cookie_list).decode("utf-8").replace("false", "False").replace("true", "True"))
         for c in cookies:
             state.driver.add_cookie(c)
-        state.driver.refresh()
+        state.driver.get(CREATOR_CHAT_URL)
 
-        try:
-            state.driver.find_element(By.XPATH, '//*[@id="douyin_login_comp_flat_panel"]/picture')
-            return {"code": 400, "data": "Login failed with cookie"}
-        except NoSuchElementException:
-            state.user_logged_in = True
-            return {"code": 200, "data": "Login successful"}
+        # Check if still on login page (login failed)
+        time.sleep(2)
+        for xpath in ['//button[contains(text(), "登录")]', '//p[contains(text(), "登录")]']:
+            try:
+                state.driver.find_element(By.XPATH, xpath)
+                return {"code": 400, "data": "Login failed with cookie"}
+            except NoSuchElementException:
+                continue
+        state.user_logged_in = True
+        return {"code": 200, "data": "Login successful"}
     except Exception as e:
         return {"code": 400, "data": f"Cookie parse error: {str(e)}"}
 
@@ -442,47 +653,28 @@ async def check_login(token: str = Depends(require_auth)):
         return {"code": 200, "data": {"logged_in": False}}
 
     try:
-        # Multiple ways to detect login status
         logged_in = False
-
-        # Method 1: Check if login panel exists (if exists, not logged in)
-        login_panel_selectors = [
-            '//*[@id="douyin_login_comp_flat_panel"]/picture',
-            '//*[@id="douyin_login_comp_flat_panel"]',
-            '//div[contains(@class, "login-panel")]',
-        ]
-        for selector in login_panel_selectors:
+        # Check for conversation list items (logged in)
+        for sel in ['[class*="conversation-list-item-"]', '[class*="item-header-name-"]']:
             try:
-                state.driver.find_element(By.XPATH, selector)
-                logged_in = False
-                break
+                els = state.driver.find_elements(By.CSS_SELECTOR, sel)
+                if els:
+                    logged_in = True
+                    break
             except:
                 continue
-        else:
-            # No login panel found, might be logged in
-            logged_in = True
-
-        # Method 2: Check for user avatar or username (if exists, logged in)
         if not logged_in:
-            user_selectors = [
-                '//img[contains(@class, "avatar")]',
-                '//div[contains(@class, "user-info")]',
-                '//span[contains(@class, "nickname")]',
-            ]
-            for selector in user_selectors:
+            # Check if login button exists
+            for xpath in ['//button[contains(text(), "登录")]', '//p[contains(text(), "登录")]']:
                 try:
-                    state.driver.find_element(By.XPATH, selector)
-                    logged_in = True
+                    state.driver.find_element(By.XPATH, xpath)
+                    logged_in = False
                     break
                 except:
                     continue
-
-        # Method 3: Check page source for login indicators
-        if not logged_in:
-            page_source = state.driver.page_source
-            if 'douyin_login_comp' not in page_source and '登录' not in page_source[:1000]:
-                logged_in = True
-
+            else:
+                if "creator.douyin.com" in state.driver.current_url:
+                    logged_in = True
         state.user_logged_in = logged_in
         return {"code": 200, "data": {"logged_in": state.user_logged_in}}
     except Exception as e:
@@ -510,7 +702,7 @@ async def browser_logout(token: str = Depends(require_auth)):
         return {"code": 400, "data": "Browser not initialized"}
 
     state.driver.delete_all_cookies()
-    state.driver.refresh()
+    state.driver.get(CREATOR_CHAT_URL)
     state.user_logged_in = False
     return {"code": 200, "data": "Logged out from Douyin"}
 
@@ -616,20 +808,38 @@ async def system_info(token: str = Depends(require_auth)):
     # Check login status if browser is initialized
     if state.browser_initialized:
         try:
-            login_panel_selectors = [
-                '//*[@id="douyin_login_comp_flat_panel"]/picture',
-                '//*[@id="douyin_login_comp_flat_panel"]',
-                '//div[contains(@class, "login-panel")]',
+            # Check for conversation list (means logged in and page loaded)
+            logged_in = False
+            check_selectors = [
+                '[class*="conversation-list-item-"]',
+                '[class*="item-header-name-"]',
             ]
-            for selector in login_panel_selectors:
+            for sel in check_selectors:
                 try:
-                    state.driver.find_element(By.XPATH, selector)
-                    state.user_logged_in = False
-                    break
+                    els = state.driver.find_elements(By.CSS_SELECTOR, sel)
+                    if els:
+                        logged_in = True
+                        break
                 except:
                     continue
-            else:
-                state.user_logged_in = True
+            if not logged_in:
+                # Check if login button exists (not logged in)
+                login_selectors = [
+                    '//button[contains(text(), "登录")]',
+                    '//p[contains(text(), "登录")]',
+                ]
+                for selector in login_selectors:
+                    try:
+                        state.driver.find_element(By.XPATH, selector)
+                        logged_in = False
+                        break
+                    except:
+                        continue
+                else:
+                    # No login button found, check page URL
+                    if "creator.douyin.com" in state.driver.current_url:
+                        logged_in = True
+            state.user_logged_in = logged_in
         except:
             pass
 
