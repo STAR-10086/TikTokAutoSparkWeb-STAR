@@ -34,9 +34,24 @@ sed -i 's/host="localhost"/host="0.0.0.0"/' /app/backend_linux.py
 # Add Chrome-specific options
 sed -i "/options.add_argument('--no-sandbox')/a\\    options.add_argument('--disable-dev-shm-usage')" /app/backend_linux.py
 
-# Add static file serving for frontend
+# Add static file serving for frontend (at the end of file)
 sed -i 's/from fastapi import FastAPI, Header, Request, Query, Body/from fastapi import FastAPI, Header, Request, Query, Body\nfrom fastapi.staticfiles import StaticFiles/' /app/backend_linux.py
-sed -i "/app = FastAPI()/a\\app.mount(\"/\", StaticFiles(directory=\"/app/dist\", html=True), name=\"static\")" /app/backend_linux.py
+# Add static mount after uvicorn.run line
+sed -i "/uvicorn.run/i\\
+# Static files must be mounted after all API routes\\
+import os\\
+from starlette.responses import FileResponse\\
+\\
+@app.middleware('http')\\
+async def serve_spa(request, call_next):\\
+    response = await call_next(request)\\
+    if response.status_code == 404 and not request.url.path.startswith('/Api') and not request.url.path.startswith('/Time') and not request.url.path.startswith('/Home'):\\
+        file_path = os.path.join('/app/dist', request.url.path.lstrip('/'))\\
+        if os.path.isfile(file_path):\\
+            return FileResponse(file_path)\\
+        return FileResponse('/app/dist/index.html')\\
+    return response\\
+" /app/backend_linux.py
 
 echo "=== Starting Backend Service ==="
 cd /app
