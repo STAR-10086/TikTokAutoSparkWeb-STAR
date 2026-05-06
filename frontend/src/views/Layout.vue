@@ -62,7 +62,8 @@ import {
   Timer,
   Monitor,
   Setting,
-  SwitchButton
+  SwitchButton,
+  Platform
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -77,6 +78,7 @@ const menuItems = computed(() => [
   { path: '/friends', label: '好友列表', icon: 'User', badge: appStore.friends.length || null },
   { path: '/tasks', label: '定时任务', icon: 'Timer', badge: appStore.tasks.length || null },
   { path: '/browser', label: '浏览器', icon: 'Monitor' },
+  { path: '/vnc', label: '远程桌面', icon: 'Platform' },
   { path: '/settings', label: '设置', icon: 'Setting' }
 ])
 

@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git reset *)",
+      "Bash(git push *)",
+      "Bash(curl -s https://api.github.com/repos/STAR-10086/TikTokAutoSparkWeb-STAR/contents)",
+      "Bash(curl -s https://raw.githubusercontent.com/STAR-10086/TikTokAutoSparkWeb-STAR/main/requirements.txt)",
+      "Bash(curl *)",
+      "Bash(git fetch *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(ssh -o StrictHostKeyChecking=no -p 20022 star@192.168.123.71 \"docker pull ghcr.io/star-10086/tiktokautosparkweb-star:latest\")",
+      "Bash(ssh -o StrictHostKeyChecking=no -p 20022 star@192.168.123.71 \"docker images | grep ghcr\")",
+      "Bash(ssh -o StrictHostKeyChecking=no -p 20022 star@192.168.123.71 \"docker images\")",
+      "Bash(ssh -o StrictHostKeyChecking=no -p 20022 star@192.168.123.71 \"curl -sL 'https://github.com/STAR-10086/TikTokAutoSparkWeb-STAR/pkgs/container/tiktokautosparkweb-star' | grep -o '[0-9.]* MB' | head -5\")",
+      "Bash(ssh -o StrictHostKeyChecking=no -p 20022 star@192.168.123.71 \"curl -sL 'https://github.com/STAR-10086/TikTokAutoSparkWeb-STAR/actions' | grep -o 'Pushed.*MB' | head -5\")",
+      "Bash(ssh -o *)",
+      "Bash(git rm *)",
+      "Bash(npm install *)"
+    ]
+  }
+}

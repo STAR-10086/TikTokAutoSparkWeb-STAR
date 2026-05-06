@@ -35,6 +35,11 @@ const routes = [
         component: () => import('../views/Browser.vue')
       },
       {
+        path: 'vnc',
+        name: 'Vnc',
+        component: () => import('../views/Vnc.vue')
+      },
+      {
         path: 'settings',
         name: 'Settings',
         component: () => import('../views/Settings.vue')

@@ -21,6 +21,7 @@ services:
     ports:
       - "5000:5000"
       - "5900:5900"
+      - "6080:6080"
     environment:
       - PORT=5000
       - ADMIN_PASSWORD=123456
@@ -29,7 +30,7 @@ services:
     volumes:
       - ./data:/app/data
     shm_size: "2gb"
-    # Start VNC + backend
+    # Start VNC + noVNC + backend
     entrypoint: ["/bin/bash", "-c"]
     command:
       - |
@@ -38,4 +39,5 @@ services:
         openbox &
         sleep 1
         x11vnc -display :99 -forever -shared -rfbauth /root/.vnc/password -rfbport 5900 &
+        cd /opt/noVNC && ./utils/novnc_proxy --vnc localhost:5900 --listen 6080 &
         python main.py
