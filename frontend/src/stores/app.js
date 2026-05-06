@@ -47,7 +47,7 @@ export const useAppStore = defineStore('app', () => {
 
   async function initBrowser() {
     try {
-      const res = await api.post('/api/browser/init')
+      const res = await api.post('/api/browser/init', {}, { timeout: 120000 })
       return res.data
     } catch (err) {
       return { code: 500, data: err.message }
